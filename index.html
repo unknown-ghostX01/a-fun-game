@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Catch the Box - Stylish Chaos</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box;}
+  body { display:flex; justify-content:center; align-items:center; height:100vh; font-family:Arial,sans-serif; touch-action:none; transition: background 0.5s, color 0.5s;}
+  body.dark { background:#111; color:#fff;}
+  body.light { background:#eee; color:#111;}
+  
+  #gameArea {
+    position:relative; width:400px; height:600px; border-radius:15px; overflow:hidden;
+    display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+    transition: background 0.5s;
+  }
+
+  body.dark #gameArea { background: linear-gradient(to bottom, #222, #111);}
+  body.light #gameArea { background: linear-gradient(to bottom, #a0eaff, #70c0ff); }
+
+  #basket {
+    position:absolute; bottom:10px; width:80px; height:20px; border-radius:10px;
+    background: linear-gradient(45deg,#0f0,#0c0); box-shadow:0 0 15px #0f0; touch-action:none;
+    transition: background 0.5s;
+  }
+
+  .box {
+    position:absolute; width:30px; height:30px; border-radius:5px;
+    background: linear-gradient(45deg,#f00,#f80); box-shadow:0 0 10px #f00; transition: background 0.5s;
+  }
+
+  #score, #lives {
+    position:absolute; top:10px; font-size:20px; padding:5px 10px; border-radius:8px;
+    background: rgba(0,0,0,0.3); color:#fff; font-weight:bold; user-select:none;
+    transition: background 0.5s, color 0.5s;
+  }
+
+  body.light #score, body.light #lives { background: rgba(255,255,255,0.6); color:#111;}
+
+  #lives { right:10px;}
+  #gameOver {
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:30px; color:#ff0; display:none; text-align:center;
+  }
+  #restartBtn { margin-top:20px; font-size:20px; padding:5px 10px; cursor:pointer; border-radius:8px; }
+  #themeBtn { position:absolute; bottom:10px; left:10px; padding:5px 10px; font-size:14px; cursor:pointer; border-radius:6px;}
+</style>
+</head>
+<body class="dark">
+<div id="gameArea">
+  <div id="basket"></div>
+  <div id="score">Score: 0</div>
+  <div id="lives">Lives: 3</div>
+  <div id="gameOver">
+    Game Over!<br>
+    <button id="restartBtn">Restart</button>
+  </div>
+  <button id="themeBtn">Toggle Theme</button>
+</div>
+
+<script>
+const basket = document.getElementById("basket");
+const gameArea = document.getElementById("gameArea");
+const scoreEl = document.getElementById("score");
+const livesEl = document.getElementById("lives");
+const gameOverEl = document.getElementById("gameOver");
+const restartBtn = document.getElementById("restartBtn");
+const themeBtn = document.getElementById("themeBtn");
+
+let basketX = 160;
+let boxes = [];
+let score = 0;
+let lives = 3;
+let boxSpeed = 3;
+let maxBoxes = 1;
+let milestone = 25;
+
+// Theme toggle
+themeBtn.addEventListener("click",()=>{
+  document.body.classList.toggle("dark");
+  document.body.classList.toggle("light");
+});
+
+// Initialize basket
+basket.style.left = basketX + "px";
+
+// Dragging basket with mouse
+let dragging = false;
+basket.addEventListener("mousedown",()=>dragging=true);
+document.addEventListener("mouseup",()=>dragging=false);
+document.addEventListener("mousemove",(e)=>{
+  if(dragging) moveBasket(e.clientX);
+});
+
+// Touch support
+basket.addEventListener("touchstart",(e)=>e.preventDefault());
+basket.addEventListener("touchmove",(e)=>{
+  e.preventDefault();
+  moveBasket(e.touches[0].clientX);
+});
+
+// Arrow keys
+document.addEventListener("keydown",(e)=>{
+  if(e.key==="ArrowLeft") basketX-=20;
+  if(e.key==="ArrowRight") basketX+=20;
+  clampBasket();
+});
+
+function moveBasket(clientX){
+  const rect = gameArea.getBoundingClientRect();
+  basketX = clientX - rect.left - basket.offsetWidth/2;
+  clampBasket();
+}
+
+function clampBasket(){
+  if(basketX<0) basketX=0;
+  if(basketX>gameArea.offsetWidth-basket.offsetWidth) basketX=gameArea.offsetWidth-basket.offsetWidth;
+  basket.style.left = basketX+"px";
+}
+
+// Spawn new box
+function spawnBox(){
+  const box = document.createElement("div");
+  box.classList.add("box");
+  box.x = Math.random()*(gameArea.offsetWidth - 30);
+  box.y = 0;
+  box.style.left = box.x + "px";
+  box.style.top = box.y + "px";
+  gameArea.appendChild(box);
+  boxes.push(box);
+}
+
+// Update boxes positions
+function updateBoxes(){
+  boxes.forEach((box,index)=>{
+    box.y += boxSpeed;
+    box.style.top = box.y + "px";
+
+    // collision
+    if(box.y + box.offsetHeight >= basket.offsetTop &&
+       box.x + box.offsetWidth >= basketX &&
+       box.x <= basketX + basket.offsetWidth){
+      score++;
+      scoreEl.textContent = "Score: "+score;
+      gameArea.removeChild(box);
+      boxes.splice(index,1);
+      adjustDifficulty();
+    }
+
+    // missed
+    else if(box.y > gameArea.offsetHeight){
+      lives--;
+      livesEl.textContent = "Lives: "+lives;
+      gameArea.removeChild(box);
+      boxes.splice(index,1);
+      if(lives<=0) endGame();
+    }
+  });
+}
+
+// Increase difficulty at milestone
+function adjustDifficulty(){
+  if(score>0 && score%milestone===0){
+    boxSpeed += 1;
+    if(maxBoxes<5) maxBoxes +=1;
+  }
+}
+
+// Maintain boxes to maxBoxes
+function maintainBoxes(){
+  while(boxes.length<maxBoxes){
+    spawnBox();
+  }
+}
+
+function gameLoop(){
+  if(lives<=0) return;
+  maintainBoxes();
+  updateBoxes();
+  requestAnimationFrame(gameLoop);
+}
+
+function endGame(){
+  gameOverEl.style.display = "block";
+}
+
+restartBtn.addEventListener("click",()=>{
+  score = 0; lives = 3; boxSpeed=3; maxBoxes=1;
+  scoreEl.textContent="Score: 0";
+  livesEl.textContent="Lives: 3";
+  gameOverEl.style.display="none";
+  boxes.forEach(b=>gameArea.removeChild(b));
+  boxes=[];
+  gameLoop();
+});
+
+gameLoop();
+</script>
+</body>
+</html>
